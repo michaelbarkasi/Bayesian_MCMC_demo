@@ -55,6 +55,7 @@ RMW <- function(
     # Generate random step
     x_next <- rnorm(domain_dim, x_current, step_size_var)
     
+    # Calculate h values, i.e., posteriors of current and proposed next steps
     h_next <- h(x_next)
     h_current <- h(x_current)
     
@@ -63,7 +64,7 @@ RMW <- function(
       if (h_next > h_current) r <- 1
       else r <- exp(h_next - h_current)
     } else {
-      r <- h(x_next)/h(x_current)
+      r <- h_next/h_current
     }
     r <- min(1, r)
     if (is.nan(r) || is.infinite(r)) r <- 0
@@ -72,7 +73,7 @@ RMW <- function(
     if (runif(1) < r) {
       if (domain_dim == 1) X_sim <- c(X_sim, x_next)
       else X_sim <- rbind(X_sim, x_next)
-      if (!is.null(update_h)) update_h <- h(x_next)
+      if (!is.null(update_h)) update_h <- h_next
     }
     
     # Increment step
@@ -114,13 +115,13 @@ posterior_unnormalized_R6 <- R6::R6Class(
   public = list(
     prior = log(0.05),
     update = function(
-    theta, # two-valued vector holding mean and sd
-    observed_sample
-    ) {
-      if (theta[2] <= 0) return(-Inf)
-      likelihood <- sum(dnorm(observed_sample, mean = theta[1], sd = theta[2], log = TRUE))
-      return(likelihood + self$prior)
-    }
+        theta, # two-valued vector holding mean and sd
+        observed_sample
+      ) {
+        if (theta[2] <= 0) return(-Inf)
+        likelihood <- sum(dnorm(observed_sample, mean = theta[1], sd = theta[2], log = TRUE))
+        return(likelihood + self$prior)
+      }
   )
 )
 
@@ -138,7 +139,7 @@ n_steps <- 1e4
 # Run the MCMC simulation to estimate the parameters 
 RMW_Bayes_parameter_sims <- RMW(
   h = function(x) posterior_unnormalized$update(x, observed_sample),
-  X = array(runif(20), c(10,2)), # A few random initization values to try
+  X = array(runif(20), c(10,2)), # A few random initialization values to try
   steps = n_steps,
   step_size_var = 0.05,
   use_log = TRUE,
@@ -158,9 +159,9 @@ RMW_Bayes_parameter_sims_end <- RMW_Bayes_parameter_sims[as.integer(n_steps_take
 estimates <- colMeans(RMW_Bayes_parameter_sims_end)
 col_quantiles <- apply(RMW_Bayes_parameter_sims_end, 2, quantile, probs = c(0.025, 0.975))
 cat("\nExpected mean:", given_mean)
-cat("\nExtimated mean: ", estimates[1], ", 95% CI: ", col_quantiles[1,1], " - ", col_quantiles[2,1], sep = "")
+cat("\nEstimated mean: ", estimates[1], ", 95% CI: ", col_quantiles[1,1], " - ", col_quantiles[2,1], sep = "")
 cat("\nExpected sd:", given_sd)
-cat("\nExtimated sd: ", estimates[2], ", 95% CI: ", col_quantiles[1,2], " - ", col_quantiles[2,2], sep = "")
+cat("\nEstimated sd: ", estimates[2], ", 95% CI: ", col_quantiles[1,2], " - ", col_quantiles[2,2], sep = "")
 cat("\nAcceptance rate: ", n_steps_taken/n_steps)
 plot(RMW_Bayes_parameter_sims[,1], col = "blue", main = "Trace of estimated mean", type = "l")
 abline(h = given_mean, col = "red")
